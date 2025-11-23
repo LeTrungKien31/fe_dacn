@@ -1,10 +1,12 @@
+// lib/screens/main_navigation_screen.dart
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import 'water_tracking_screen.dart';
-import 'activity_screen.dart';
-import 'meals_screen.dart';
-import 'ingredients_screen.dart';
 import 'dashboard_screen.dart';
+import 'water_tracking_screen.dart';
+import 'meals_screen.dart';
+import 'activity_screen.dart';
+import 'profile_screen.dart';
+import 'statistics_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -16,11 +18,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
+    const DashboardScreen(),
     const WaterTrackingScreen(),
     const MealsScreen(),
-    const IngredientsScreen(),
     const ActivityScreen(),
-    const DashboardScreen(),
+    const StatisticsScreen(),
+    const ProfileScreen(),
   ];
 
   @override
@@ -48,8 +51,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           selectedItemColor: AppColors.primary,
           unselectedItemColor: Colors.grey,
           selectedFontSize: 12,
-          unselectedFontSize: 12,
+          unselectedFontSize: 11,
           items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: 'Trang chủ',
+            ),
             BottomNavigationBarItem(
               icon: Icon(Icons.water_drop_outlined),
               activeIcon: Icon(Icons.water_drop),
@@ -61,19 +69,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               label: 'Món ăn',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.egg_outlined),
-              activeIcon: Icon(Icons.egg),
-              label: 'Nguyên liệu',
-            ),
-            BottomNavigationBarItem(
               icon: Icon(Icons.fitness_center_outlined),
               activeIcon: Icon(Icons.fitness_center),
               label: 'Vận động',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard_outlined),
-              activeIcon: Icon(Icons.dashboard),
-              label: 'Tổng quan',
+              icon: Icon(Icons.bar_chart_outlined),
+              activeIcon: Icon(Icons.bar_chart),
+              label: 'Thống kê',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              activeIcon: Icon(Icons.person),
+              label: 'Hồ sơ',
             ),
           ],
         ),

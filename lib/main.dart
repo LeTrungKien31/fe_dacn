@@ -1,3 +1,4 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'theme/app_theme.dart';
@@ -10,6 +11,9 @@ import 'screens/meals_screen.dart';
 import 'screens/meal_detail_screen.dart';
 import 'screens/ingredients_screen.dart';
 import 'screens/reminders_screen.dart';
+import 'screens/profile_screen.dart';
+import 'screens/profile_form_screen.dart';
+import 'screens/statistics_screen.dart';
 
 void main() => runApp(const ProviderScope(child: PHMApp()));
 
@@ -30,10 +34,12 @@ class PHMApp extends StatelessWidget {
           case '/register':
             return MaterialPageRoute(builder: (_) => const RegisterScreen());
           case '/dashboard':
-            return MaterialPageRoute(builder: (_) => const MainNavigationScreen());
           case '/home':
             return MaterialPageRoute(builder: (_) => const MainNavigationScreen());
+          
+          // Individual screens (can be accessed directly)
           case '/water':
+          case '/log/water':
             return MaterialPageRoute(builder: (_) => const WaterTrackingScreen());
           case '/activity':
           case '/log/activity':
@@ -50,8 +56,16 @@ class PHMApp extends StatelessWidget {
             return MaterialPageRoute(builder: (_) => const IngredientsScreen());
           case '/reminders':
             return MaterialPageRoute(builder: (_) => const RemindersScreen());
-          case '/log/water':
-            return MaterialPageRoute(builder: (_) => const WaterTrackingScreen());
+          case '/profile':
+            return MaterialPageRoute(builder: (_) => const ProfileScreen());
+          case '/profile/form':
+            final existingProfile = settings.arguments as Map<String, dynamic>?;
+            return MaterialPageRoute(
+              builder: (_) => ProfileFormScreen(existingProfile: existingProfile),
+            );
+          case '/statistics':
+            return MaterialPageRoute(builder: (_) => const StatisticsScreen());
+          
           default:
             return MaterialPageRoute(builder: (_) => const LoginScreen());
         }
