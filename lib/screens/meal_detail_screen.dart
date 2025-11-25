@@ -4,8 +4,8 @@ import '../theme/app_theme.dart';
 import '../provider.dart';
 import 'meals_screen.dart';
 
-// Provider để lấy chi tiết món ăn
-final foodDetailProvider = FutureProvider.family<Map<String, dynamic>, int>((
+// Provider để lấy chi tiết món ăn - FIX: Thêm .autoDispose
+final foodDetailProvider = FutureProvider.autoDispose.family<Map<String, dynamic>, int>((
   ref,
   foodId,
 ) async {
@@ -50,7 +50,23 @@ class MealDetailScreen extends ConsumerWidget {
               children: [
                 const Icon(Icons.error_outline, size: 64, color: Colors.red),
                 const SizedBox(height: 16),
-                Text('Lỗi: ${e.toString()}'),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    'Lỗi tải chi tiết món ăn',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    e.toString(),
+                    style: TextStyle(color: Colors.grey[600]),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () => ref.invalidate(foodDetailProvider(meal!.id)),

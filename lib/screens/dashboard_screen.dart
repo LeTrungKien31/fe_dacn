@@ -16,6 +16,35 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     ref.invalidate(todayWaterProvider);
     ref.invalidate(todayMealKcalProvider);
     ref.invalidate(todayKcalOutProvider);
+    ref.invalidate(meProvider);
+  }
+
+  // FIX: Sửa hàm logout để clear tất cả providers
+  Future<void> _handleLogout() async {
+    try {
+      // Logout từ service
+      await ref.read(authServiceProvider).logout();
+      
+      // Clear ALL providers
+      ref.invalidate(meProvider);
+      ref.invalidate(todayWaterProvider);
+      ref.invalidate(todayMealKcalProvider);
+      ref.invalidate(todayKcalOutProvider);
+      
+      if (mounted) {
+        // Navigate to login và xóa toàn bộ navigation stack
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/login',
+          (route) => false, // Remove all previous routes
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi khi đăng xuất: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -42,12 +71,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await ref.read(authServiceProvider).logout();
-              if (mounted) {
-                Navigator.of(context).pushReplacementNamed('/login');
-              }
-            },
+            onPressed: _handleLogout, // FIX: Dùng hàm mới
           ),
         ],
       ),

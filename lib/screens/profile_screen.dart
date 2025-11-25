@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:health/provider.dart';
 import '../theme/app_theme.dart';
 import '../providers/profile_providers.dart';
+import '../auth/providers.dart'; // FIX: Import để có thể logout
 import 'profile_form_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -19,6 +21,57 @@ class ProfileScreen extends ConsumerWidget {
     if (bmi < 25) return Colors.green;
     if (bmi < 30) return Colors.orange;
     return Colors.red;
+  }
+
+  // FIX: Thêm hàm logout
+  Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Đăng xuất'),
+        content: const Text('Bạn có chắc muốn đăng xuất?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Đăng xuất'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && context.mounted) {
+      try {
+        // Logout từ service
+        await ref.read(authServiceProvider).logout();
+        
+        // Clear ALL providers
+        ref.invalidate(meProvider);
+        ref.invalidate(todayWaterProvider);
+        ref.invalidate(todayMealKcalProvider);
+        ref.invalidate(todayKcalOutProvider);
+        ref.invalidate(userProfileProvider);
+        ref.invalidate(healthInsightsProvider);
+        
+        if (context.mounted) {
+          // Navigate to login và xóa toàn bộ navigation stack
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            '/login',
+            (route) => false, // Remove all previous routes
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Lỗi khi đăng xuất: $e')),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -45,6 +98,11 @@ class ProfileScreen extends ConsumerWidget {
                 ref.invalidate(healthInsightsProvider);
               });
             },
+          ),
+          // FIX: Thêm nút logout
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () => _handleLogout(context, ref),
           ),
         ],
       ),

@@ -8,7 +8,8 @@ final profileServiceProvider = Provider<ProfileService>((ref) {
   return ProfileService(dio);
 });
 
-final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+// FIX: Thêm .autoDispose để tự động clean up khi logout
+final userProfileProvider = FutureProvider.autoDispose<Map<String, dynamic>?>((ref) async {
   try {
     return await ref.watch(profileServiceProvider).getProfile();
   } catch (e) {
@@ -16,7 +17,8 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   }
 });
 
-final healthInsightsProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+// FIX: Thêm .autoDispose để tự động clean up khi logout
+final healthInsightsProvider = FutureProvider.autoDispose<Map<String, dynamic>?>((ref) async {
   try {
     return await ref.watch(profileServiceProvider).getHealthInsights();
   } catch (e) {
