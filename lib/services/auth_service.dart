@@ -12,43 +12,51 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    // Use 'fullName' (camelCase) to match backend DTO
-    final r = await _client.dio.post(
-      '/api/v1/auth/register',
-      data: {'fullName': fullname, 'email': email, 'password': password},
-    );
-    if (r.statusCode != 200 && r.statusCode != 201) {
-      throw Exception('Đăng ký lỗi ${r.statusCode}: ${r.data}');
-    }
-    // Optionally save token from registration
-    final token = (r.data is Map) ? r.data['token'] as String? : null;
-    if (token != null && token.isNotEmpty) {
-      await _storage.save(token);
+    try {
+      // Backend expects 'fullName' (camelCase)
+      final r = await _client.dio.post(
+        '/api/v1/auth/register',
+        data: {'fullName': fullname, 'email': email, 'password': password},
+      );
+
+      // Backend returns { "token": "..." }
+      final token = (r.data is Map) ? r.data['token'] as String? : null;
+      if (token != null && token.isNotEmpty) {
+        await _storage.save(token);
+      }
+    } catch (e) {
+      throw Exception('Registration failed: $e');
     }
   }
 
   Future<void> login({required String email, required String password}) async {
-    // Clear old token
-    await _storage.clear();
+    try {
+      // Clear old token
+      await _storage.clear();
 
-    final r = await _client.post(
-      '/auth/login',
-      data: {'email': email, 'password': password},
-    );
-    if (r.statusCode != 200) {
-      throw Exception('Đăng nhập lỗi ${r.statusCode}: ${r.data}');
+      final r = await _client.post(
+        '/auth/login',
+        data: {'email': email, 'password': password},
+      );
+
+      // Backend returns { "token": "..." }
+      final token = (r.data is Map) ? r.data['token'] as String? : null;
+      if (token == null || token.isEmpty) {
+        throw Exception('No token received from server');
+      }
+      await _storage.save(token);
+    } catch (e) {
+      throw Exception('Login failed: $e');
     }
-    // FIX: Backend returns "token", not "accessToken"
-    final token = (r.data is Map) ? r.data['token'] as String? : null;
-    if (token == null || token.isEmpty) {
-      throw Exception('Không nhận được token');
-    }
-    await _storage.save(token);
   }
 
   Future<Map<String, dynamic>> me() async {
-    final r = await _client.get('/user/me');
-    return Map<String, dynamic>.from(r.data);
+    try {
+      final r = await _client.get('/user/me');
+      return Map<String, dynamic>.from(r.data);
+    } catch (e) {
+      throw Exception('Failed to get user info: $e');
+    }
   }
 
   Future<void> logout() => _storage.clear();
