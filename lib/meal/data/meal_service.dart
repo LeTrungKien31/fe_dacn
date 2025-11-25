@@ -22,12 +22,6 @@ class MealService {
     return (r.data as List).cast<Map<String, dynamic>>();
   }
 
-  /// Lấy chi tiết món ăn với nguyên liệu và cách nấu
-  Future<Map<String, dynamic>> getFoodDetail(int foodId) async {
-    final res = await _client.get('/foods/$foodId');
-    return Map<String, dynamic>.from(res.data);
-  }
-
   Future<List<Map<String, dynamic>>> history(DateTime from, DateTime to) async {
     final res = await _client.get(
       '/meal/history',
