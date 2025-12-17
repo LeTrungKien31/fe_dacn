@@ -21,8 +21,6 @@ class ReminderModel {
     this.isEnabled = true,
   });
 
-  // ==== Serialize / Deserialize để lưu SharedPreferences ====
-
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -34,10 +32,22 @@ class ReminderModel {
   }
 
   factory ReminderModel.fromMap(Map<String, dynamic> map) {
+    // Parse daysOfWeek with null safety
+    List<int> parsedDays = [1, 2, 3, 4, 5, 6, 7]; // default to all days
+    if (map['days'] != null) {
+      final daysList = map['days'] as List<dynamic>?;
+      if (daysList != null && daysList.isNotEmpty) {
+        parsedDays = daysList.map((e) => e as int).toList();
+      }
+    }
+
     return ReminderModel(
       id: map['id'] as String,
-      time: TimeOfDay(hour: map['hour'] as int, minute: map['minute'] as int),
-      daysOfWeek: (map['days'] as List<dynamic>).map((e) => e as int).toList(),
+      time: TimeOfDay(
+        hour: map['hour'] as int? ?? 8,
+        minute: map['minute'] as int? ?? 0,
+      ),
+      daysOfWeek: parsedDays,
       isEnabled: map['enabled'] as bool? ?? true,
     );
   }
@@ -61,45 +71,46 @@ class _RemindersScreenState extends State<RemindersScreen> {
     _loadReminders();
   }
 
-  // ====== Persistence ======
-
+  // ====== DEFAULT REMINDERS - FIX: Sửa giờ hợp lý ======
   List<ReminderModel> _buildDefaultReminders() {
     return [
       ReminderModel(
         id: '1',
-        time: const TimeOfDay(hour: 7, minute: 20),
+        time: const TimeOfDay(hour: 8, minute: 0), // 8:00 AM
         daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
         isEnabled: true,
       ),
       ReminderModel(
         id: '2',
-        time: const TimeOfDay(hour: 10, minute: 50),
-        daysOfWeek: [2, 4, 6],
+        time: const TimeOfDay(hour: 12, minute: 0), // 12:00 PM
+        daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
         isEnabled: true,
       ),
       ReminderModel(
         id: '3',
-        time: const TimeOfDay(hour: 4, minute: 0),
+        time: const TimeOfDay(hour: 16, minute: 0), // 4:00 PM
         daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
         isEnabled: true,
       ),
       ReminderModel(
         id: '4',
-        time: const TimeOfDay(hour: 22, minute: 0),
-        daysOfWeek: [2, 4, 5, 6],
+        time: const TimeOfDay(hour: 20, minute: 0), // 8:00 PM
+        daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
         isEnabled: false,
       ),
     ];
   }
 
+  // ====== PERSISTENCE ======
   Future<void> _loadReminders() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString(_storageKey);
 
     if (jsonStr == null) {
-      // Chưa có dữ liệu -> dùng default
       _reminders = _buildDefaultReminders();
       await _saveReminders();
+      // FIX: Schedule notifications for enabled default reminders
+      await _scheduleAllReminders();
     } else {
       final List<dynamic> list = jsonDecode(jsonStr) as List<dynamic>;
       _reminders = list
@@ -118,8 +129,27 @@ class _RemindersScreenState extends State<RemindersScreen> {
     await prefs.setString(_storageKey, jsonEncode(data));
   }
 
-  // ====== UI helpers ======
+  // FIX: Schedule all enabled reminders
+  Future<void> _scheduleAllReminders() async {
+    for (final reminder in _reminders) {
+      if (reminder.isEnabled) {
+        await _scheduleReminder(reminder);
+      }
+    }
+  }
 
+  // FIX: Schedule single reminder
+  Future<void> _scheduleReminder(ReminderModel reminder) async {
+    final intId = int.tryParse(reminder.id) ?? 0;
+    await NotificationService.instance.scheduleDaily(
+      id: intId,
+      time: reminder.time,
+      title: 'Đến giờ uống nước 💧',
+      body: 'Hãy uống nước để giữ sức khỏe nhé!',
+    );
+  }
+
+  // ====== UI helpers ======
   String _formatTime(TimeOfDay time) {
     final hour = time.hour.toString().padLeft(2, '0');
     final minute = time.minute.toString().padLeft(2, '0');
@@ -140,29 +170,69 @@ class _RemindersScreenState extends State<RemindersScreen> {
           onSave: (time, days) async {
             final newId = DateTime.now().millisecondsSinceEpoch.toString();
 
+            final newReminder = ReminderModel(
+              id: newId,
+              time: time,
+              daysOfWeek: days.isEmpty ? [1, 2, 3, 4, 5, 6, 7] : days,
+              isEnabled: true,
+            );
+
             setState(() {
-              _reminders.add(
-                ReminderModel(
-                  id: newId,
-                  time: time,
-                  daysOfWeek: days.isEmpty ? [1, 2, 3, 4, 5, 6, 7] : days,
-                ),
-              );
+              _reminders.add(newReminder);
             });
 
             await _saveReminders();
+            await _scheduleReminder(newReminder);
 
-            // Đặt thông báo demo
-            await NotificationService.instance.scheduleDaily(
-              id: int.tryParse(newId) ?? 0,
-              time: time,
-              title: 'Đến giờ uống nước 💧',
-              body: 'Hãy uống nước để giữ sức khỏe nhé!',
-            );
+            if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Đã thêm nhắc nhở')));
+            }
           },
         ),
       ),
     );
+  }
+
+  // FIX: Add delete reminder function
+  Future<void> _deleteReminder(ReminderModel reminder) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xóa nhắc nhở'),
+        content: Text('Xóa nhắc nhở lúc ${_formatTime(reminder.time)}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Xóa'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() {
+        _reminders.removeWhere((r) => r.id == reminder.id);
+      });
+
+      await _saveReminders();
+
+      // Cancel notification
+      final intId = int.tryParse(reminder.id) ?? 0;
+      await NotificationService.instance.cancel(intId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã xóa nhắc nhở')));
+      }
+    }
   }
 
   @override
@@ -180,7 +250,6 @@ class _RemindersScreenState extends State<RemindersScreen> {
           : Column(
               children: [
                 const SizedBox(height: 20),
-                // Water glass icon
                 Container(
                   width: 60,
                   height: 80,
@@ -193,14 +262,25 @@ class _RemindersScreenState extends State<RemindersScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _reminders.length,
-                    itemBuilder: (ctx, index) =>
-                        _buildReminderCard(_reminders[index]),
+                if (_reminders.isEmpty)
+                  const Expanded(
+                    child: Center(
+                      child: Text(
+                        'Chưa có nhắc nhở nào\nNhấn + để thêm',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey, fontSize: 16),
+                      ),
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _reminders.length,
+                      itemBuilder: (ctx, index) =>
+                          _buildReminderCard(_reminders[index]),
+                    ),
                   ),
-                ),
               ],
             ),
       floatingActionButton: FloatingActionButton(
@@ -212,65 +292,85 @@ class _RemindersScreenState extends State<RemindersScreen> {
   }
 
   Widget _buildReminderCard(ReminderModel reminder) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+    return Dismissible(
+      key: Key(reminder.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        decoration: BoxDecoration(
+          color: Colors.red,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.centerRight,
+        child: const Icon(Icons.delete, color: Colors.white, size: 28),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _formatTime(reminder.time),
-                  style: const TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w300,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatDays(reminder.daysOfWeek),
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                ),
-              ],
+      onDismissed: (_) => _deleteReminder(reminder),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-          ),
-          Switch(
-            value: reminder.isEnabled,
-            onChanged: (value) async {
-              setState(() {
-                reminder.isEnabled = value;
-              });
-              await _saveReminders();
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _formatTime(reminder.time),
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w300,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatDays(reminder.daysOfWeek),
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: reminder.isEnabled,
+              onChanged: (value) async {
+                setState(() {
+                  reminder.isEnabled = value;
+                });
+                await _saveReminders();
 
-              final intId = int.tryParse(reminder.id) ?? 0;
+                final intId = int.tryParse(reminder.id) ?? 0;
 
-              if (value) {
-                await NotificationService.instance.scheduleDaily(
-                  id: intId,
-                  time: reminder.time,
-                  title: 'Đến giờ uống nước 💧',
-                  body: 'Hãy uống nước để giữ sức khỏe nhé!',
-                );
-              } else {
-                await NotificationService.instance.cancel(intId);
-              }
-            },
-            activeColor: AppColors.primary,
-          ),
-        ],
+                if (value) {
+                  await _scheduleReminder(reminder);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Đã bật nhắc nhở')),
+                    );
+                  }
+                } else {
+                  await NotificationService.instance.cancel(intId);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Đã tắt nhắc nhở')),
+                    );
+                  }
+                }
+              },
+              activeColor: AppColors.primary,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -286,8 +386,8 @@ class SetReminderScreen extends StatefulWidget {
 }
 
 class _SetReminderScreenState extends State<SetReminderScreen> {
-  int _selectedHour = 4;
-  int _selectedMinute = 50;
+  int _selectedHour = 8; // FIX: Default to 8 AM
+  int _selectedMinute = 0;
   final Set<int> _selectedDays = {1, 2, 3, 4, 5, 6, 7};
   bool _repeat = true;
 
@@ -331,6 +431,8 @@ class _SetReminderScreenState extends State<SetReminderScreen> {
           }, 60),
           const SizedBox(height: 16),
           _buildRepeatOption(),
+          // FIX: Add day selector when repeat is enabled
+          if (_repeat) ...[const SizedBox(height: 16), _buildDaySelector()],
           const Spacer(),
           Padding(
             padding: const EdgeInsets.all(16),
@@ -357,11 +459,6 @@ class _SetReminderScreenState extends State<SetReminderScreen> {
                       final days = _repeat ? _selectedDays.toList() : <int>[];
 
                       widget.onSave(time, days);
-
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Đã thiết lập nhắc nhở')),
-                      );
                       Navigator.pop(context);
                     },
                     style: ElevatedButton.styleFrom(
@@ -438,6 +535,81 @@ class _SetReminderScreenState extends State<SetReminderScreen> {
               activeColor: AppColors.primary,
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // FIX: Add day selector UI
+  Widget _buildDaySelector() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.waterBlue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Chọn ngày lặp lại',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildDayChip('T2', 1),
+                _buildDayChip('T3', 2),
+                _buildDayChip('T4', 3),
+                _buildDayChip('T5', 4),
+                _buildDayChip('T6', 5),
+                _buildDayChip('T7', 6),
+                _buildDayChip('CN', 7),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDayChip(String label, int day) {
+    final isSelected = _selectedDays.contains(day);
+    return InkWell(
+      onTap: () {
+        setState(() {
+          if (isSelected) {
+            if (_selectedDays.length > 1) {
+              _selectedDays.remove(day);
+            }
+          } else {
+            _selectedDays.add(day);
+          }
+        });
+      },
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isSelected ? AppColors.primary : Colors.grey[300]!,
+            width: 2,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.grey[600],
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              fontSize: 12,
+            ),
+          ),
         ),
       ),
     );
