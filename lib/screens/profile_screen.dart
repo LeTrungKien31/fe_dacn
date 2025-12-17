@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:health/provider.dart';
 import '../theme/app_theme.dart';
 import '../providers/profile_providers.dart';
-import '../auth/providers.dart'; // FIX: Import để có thể logout
 import 'profile_form_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {

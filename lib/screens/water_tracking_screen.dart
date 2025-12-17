@@ -107,8 +107,6 @@ class _WaterTrackingScreenState extends ConsumerState<WaterTrackingScreen> {
           _buildQuickAddButtons(),
           const SizedBox(height: 20),
           _buildCustomInput(),
-          const SizedBox(height: 16),
-          _buildCaloriesInput(),
           const SizedBox(height: 20),
           _buildReminderButton(),
           const SizedBox(height: 30),
@@ -160,22 +158,21 @@ class _WaterTrackingScreenState extends ConsumerState<WaterTrackingScreen> {
   }
 
   Widget _buildQuickAddButtons() {
-    final amounts = [100, 50, 200, 500];
+    final amounts = [100, 200, 500]; // chỉ còn các nút cộng
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: amounts.map((amt) {
-        final isFirst = amt == 100;
         return ElevatedButton(
           onPressed: () => _addWater(amt),
           style: ElevatedButton.styleFrom(
-            backgroundColor: isFirst ? AppColors.error : AppColors.waterBlue,
+            backgroundColor: AppColors.waterBlue,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
           ),
-          child: Text(isFirst ? '-$amt' : '+$amt'),
+          child: Text('+$amt'),
         );
       }).toList(),
     );
@@ -223,23 +220,7 @@ class _WaterTrackingScreenState extends ConsumerState<WaterTrackingScreen> {
     );
   }
 
-  Widget _buildCaloriesInput() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Text(
-            'Thêm số Calories',
-            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
-  }
+  
 
   Widget _buildReminderButton() {
     return InkWell(

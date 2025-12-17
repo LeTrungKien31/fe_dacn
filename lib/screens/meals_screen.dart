@@ -112,6 +112,7 @@ class _MealsScreenState extends ConsumerState<MealsScreen> {
       );
     }
 
+    // ignore: unused_local_variable
     final favorites = _filteredMeals.where((m) => m.isFavorite).toList();
     final others = _filteredMeals.where((m) => !m.isFavorite).toList();
     
@@ -146,15 +147,15 @@ class _MealsScreenState extends ConsumerState<MealsScreen> {
                   ),
                 ),
               ),
-              if (favorites.isNotEmpty) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('Yêu thích',
-                      style: TextStyle(fontSize: 16, color: Colors.grey[600])),
-                ),
-                const SizedBox(height: 12),
-                _buildMealsGrid(favorites),
-              ],
+              // if (favorites.isNotEmpty) ...[
+              //   Padding(
+              //     padding: const EdgeInsets.symmetric(horizontal: 16),
+              //     child: Text('Yêu thích',
+              //         style: TextStyle(fontSize: 16, color: Colors.grey[600])),
+              //   ),
+              //   const SizedBox(height: 12),
+              //   _buildMealsGrid(favorites),
+              // ],
               if (others.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),

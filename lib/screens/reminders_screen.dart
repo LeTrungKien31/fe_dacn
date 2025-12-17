@@ -1,7 +1,12 @@
 // ignore_for_file: deprecated_member_use
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../theme/app_theme.dart';
+import '../services/notification_service.dart';
 
 class ReminderModel {
   final String id;
@@ -15,6 +20,27 @@ class ReminderModel {
     required this.daysOfWeek,
     this.isEnabled = true,
   });
+
+  // ==== Serialize / Deserialize để lưu SharedPreferences ====
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'hour': time.hour,
+      'minute': time.minute,
+      'days': daysOfWeek,
+      'enabled': isEnabled,
+    };
+  }
+
+  factory ReminderModel.fromMap(Map<String, dynamic> map) {
+    return ReminderModel(
+      id: map['id'] as String,
+      time: TimeOfDay(hour: map['hour'] as int, minute: map['minute'] as int),
+      daysOfWeek: (map['days'] as List<dynamic>).map((e) => e as int).toList(),
+      isEnabled: map['enabled'] as bool? ?? true,
+    );
+  }
 }
 
 class RemindersScreen extends StatefulWidget {
@@ -24,32 +50,75 @@ class RemindersScreen extends StatefulWidget {
 }
 
 class _RemindersScreenState extends State<RemindersScreen> {
-  final List<ReminderModel> _reminders = [
-    ReminderModel(
-      id: '1',
-      time: const TimeOfDay(hour: 7, minute: 20),
-      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
-      isEnabled: true,
-    ),
-    ReminderModel(
-      id: '2',
-      time: const TimeOfDay(hour: 10, minute: 50),
-      daysOfWeek: [2, 4, 6],
-      isEnabled: true,
-    ),
-    ReminderModel(
-      id: '3',
-      time: const TimeOfDay(hour: 4, minute: 0),
-      daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
-      isEnabled: true,
-    ),
-    ReminderModel(
-      id: '4',
-      time: const TimeOfDay(hour: 22, minute: 0),
-      daysOfWeek: [2, 4, 5, 6],
-      isEnabled: false,
-    ),
-  ];
+  static const _storageKey = 'water_reminders';
+
+  List<ReminderModel> _reminders = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReminders();
+  }
+
+  // ====== Persistence ======
+
+  List<ReminderModel> _buildDefaultReminders() {
+    return [
+      ReminderModel(
+        id: '1',
+        time: const TimeOfDay(hour: 7, minute: 20),
+        daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+        isEnabled: true,
+      ),
+      ReminderModel(
+        id: '2',
+        time: const TimeOfDay(hour: 10, minute: 50),
+        daysOfWeek: [2, 4, 6],
+        isEnabled: true,
+      ),
+      ReminderModel(
+        id: '3',
+        time: const TimeOfDay(hour: 4, minute: 0),
+        daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+        isEnabled: true,
+      ),
+      ReminderModel(
+        id: '4',
+        time: const TimeOfDay(hour: 22, minute: 0),
+        daysOfWeek: [2, 4, 5, 6],
+        isEnabled: false,
+      ),
+    ];
+  }
+
+  Future<void> _loadReminders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString(_storageKey);
+
+    if (jsonStr == null) {
+      // Chưa có dữ liệu -> dùng default
+      _reminders = _buildDefaultReminders();
+      await _saveReminders();
+    } else {
+      final List<dynamic> list = jsonDecode(jsonStr) as List<dynamic>;
+      _reminders = list
+          .map((e) => ReminderModel.fromMap(e as Map<String, dynamic>))
+          .toList();
+    }
+
+    if (mounted) {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _saveReminders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = _reminders.map((e) => e.toMap()).toList();
+    await prefs.setString(_storageKey, jsonEncode(data));
+  }
+
+  // ====== UI helpers ======
 
   String _formatTime(TimeOfDay time) {
     final hour = time.hour.toString().padLeft(2, '0');
@@ -68,14 +137,28 @@ class _RemindersScreenState extends State<RemindersScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => SetReminderScreen(
-          onSave: (time, days) {
+          onSave: (time, days) async {
+            final newId = DateTime.now().millisecondsSinceEpoch.toString();
+
             setState(() {
-              _reminders.add(ReminderModel(
-                id: DateTime.now().millisecondsSinceEpoch.toString(),
-                time: time,
-                daysOfWeek: days,
-              ));
+              _reminders.add(
+                ReminderModel(
+                  id: newId,
+                  time: time,
+                  daysOfWeek: days.isEmpty ? [1, 2, 3, 4, 5, 6, 7] : days,
+                ),
+              );
             });
+
+            await _saveReminders();
+
+            // Đặt thông báo demo
+            await NotificationService.instance.scheduleDaily(
+              id: int.tryParse(newId) ?? 0,
+              time: time,
+              title: 'Đến giờ uống nước 💧',
+              body: 'Hãy uống nước để giữ sức khỏe nhé!',
+            );
           },
         ),
       ),
@@ -92,31 +175,34 @@ class _RemindersScreenState extends State<RemindersScreen> {
         ),
         title: const Text('THÔNG BÁO'),
       ),
-      body: Column(
-        children: [
-          const SizedBox(height: 20),
-          // Water glass icon
-          Container(
-            width: 60,
-            height: 80,
-            decoration: BoxDecoration(
-              color: AppColors.waterBlue.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                const SizedBox(height: 20),
+                // Water glass icon
+                Container(
+                  width: 60,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: AppColors.waterBlue.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Center(
+                    child: Text('💧', style: TextStyle(fontSize: 36)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _reminders.length,
+                    itemBuilder: (ctx, index) =>
+                        _buildReminderCard(_reminders[index]),
+                  ),
+                ),
+              ],
             ),
-            child: const Center(
-              child: Text('💧', style: TextStyle(fontSize: 36)),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _reminders.length,
-              itemBuilder: (ctx, index) => _buildReminderCard(_reminders[index]),
-            ),
-          ),
-        ],
-      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddReminderDialog,
         backgroundColor: AppColors.primary,
@@ -156,20 +242,31 @@ class _RemindersScreenState extends State<RemindersScreen> {
                 const SizedBox(height: 4),
                 Text(
                   _formatDays(reminder.daysOfWeek),
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
               ],
             ),
           ),
           Switch(
             value: reminder.isEnabled,
-            onChanged: (value) {
+            onChanged: (value) async {
               setState(() {
                 reminder.isEnabled = value;
               });
+              await _saveReminders();
+
+              final intId = int.tryParse(reminder.id) ?? 0;
+
+              if (value) {
+                await NotificationService.instance.scheduleDaily(
+                  id: intId,
+                  time: reminder.time,
+                  title: 'Đến giờ uống nước 💧',
+                  body: 'Hãy uống nước để giữ sức khỏe nhé!',
+                );
+              } else {
+                await NotificationService.instance.cancel(intId);
+              }
             },
             activeColor: AppColors.primary,
           ),
@@ -181,9 +278,9 @@ class _RemindersScreenState extends State<RemindersScreen> {
 
 class SetReminderScreen extends StatefulWidget {
   final Function(TimeOfDay time, List<int> days) onSave;
-  
+
   const SetReminderScreen({super.key, required this.onSave});
-  
+
   @override
   State<SetReminderScreen> createState() => _SetReminderScreenState();
 }
@@ -253,14 +350,19 @@ class _SetReminderScreenState extends State<SetReminderScreen> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () {
-                      widget.onSave(
-                        TimeOfDay(hour: _selectedHour, minute: _selectedMinute),
-                        _selectedDays.toList(),
+                      final time = TimeOfDay(
+                        hour: _selectedHour,
+                        minute: _selectedMinute,
+                      );
+                      final days = _repeat ? _selectedDays.toList() : <int>[];
+
+                      widget.onSave(time, days);
+
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Đã thiết lập nhắc nhở')),
                       );
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Set remind sucess')),
-                      );
                     },
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -277,7 +379,12 @@ class _SetReminderScreenState extends State<SetReminderScreen> {
     );
   }
 
-  Widget _buildTimePicker(String label, int value, Function(int) onChanged, int max) {
+  Widget _buildTimePicker(
+    String label,
+    int value,
+    Function(int) onChanged,
+    int max,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -295,10 +402,13 @@ class _SetReminderScreenState extends State<SetReminderScreen> {
             DropdownButton<int>(
               value: value,
               underline: const SizedBox(),
-              items: List.generate(max, (i) => DropdownMenuItem(
-                value: i,
-                child: Text(i.toString().padLeft(2, '0')),
-              )),
+              items: List.generate(
+                max,
+                (i) => DropdownMenuItem(
+                  value: i,
+                  child: Text(i.toString().padLeft(2, '0')),
+                ),
+              ),
               onChanged: (val) => onChanged(val ?? 0),
             ),
           ],
